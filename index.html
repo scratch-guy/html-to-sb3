@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HTML→SB3 Converter w/ Code</title>
+<title>HTML→SB3 Converter</title>
 <style>
 body { font-family: Arial; max-width: 800px; margin: 50px auto; padding: 20px; }
 form { display: flex; flex-direction: column; gap: 15px; }
@@ -15,7 +15,7 @@ button:hover { background-color: #45a049; }
 </head>
 <body>
 
-<h1>HTML→SB3 Converter w/ Code</h1>
+<h1>HTML→SB3 Converter</h1>
 <form id="uploadForm">
   <label for="fileUpload">Upload Directory:</label>
   <input type="file" id="fileUpload" webkitdirectory directory multiple>
@@ -23,10 +23,11 @@ button:hover { background-color: #45a049; }
 </form>
 <div id="status"></div>
 
+<!-- JSZip CDN (must load BEFORE using it) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.11.0/jszip.min.js"></script>
 
 <script>
-// Base64 utility
+// Convert a File object to Base64
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -36,14 +37,13 @@ function fileToBase64(file) {
   });
 }
 
-// Parse JS into Scratch blocks (very simple function->procedure mapping)
+// Parse JS functions → Scratch procedure blocks
 async function parseJS(file) {
   const text = await file.text();
   const blocks = {};
   const functions = [...text.matchAll(/function\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/g)];
-  
   for (let f of functions) {
-    const [_, name, params] = f;
+    const [_, name] = f;
     const blockId = name + "_block";
     blocks[blockId] = {
       opcode: "procedures_define",
@@ -60,7 +60,7 @@ async function parseJS(file) {
   return blocks;
 }
 
-// Parse HTML buttons as Scratch events
+// Parse HTML buttons → Scratch events
 async function parseHTML(file) {
   const text = await file.text();
   const buttons = [...text.matchAll(/<button[^>]*id=["']([^"']+)["']/g)];
@@ -83,32 +83,32 @@ async function parseHTML(file) {
   return blocks;
 }
 
-// Create SB3
+// Create the SB3 project from files
 async function createSB3(files) {
   const project = {
-    "targets": [{
-      "isStage": true,
-      "name": "Stage",
-      "variables": {},
-      "lists": {},
-      "broadcasts": {},
-      "blocks": {},
-      "comments": {},
-      "currentCostume": 0,
-      "costumes": [{
-        "assetId": "cd21514d0531fdffb22204e0ec5529a3",
-        "name": "backdrop1",
-        "md5ext": "cd21514d0531fdffb22204e0ec5529a3.svg",
-        "dataFormat": "svg",
-        "rotationCenterX": 240,
-        "rotationCenterY": 180
+    targets: [{
+      isStage: true,
+      name: "Stage",
+      variables: {},
+      lists: {},
+      broadcasts: {},
+      blocks: {},
+      comments: {},
+      currentCostume: 0,
+      costumes: [{
+        assetId: "cd21514d0531fdffb22204e0ec5529a3",
+        name: "backdrop1",
+        md5ext: "cd21514d0531fdffb22204e0ec5529a3.svg",
+        dataFormat: "svg",
+        rotationCenterX: 240,
+        rotationCenterY: 180
       }],
-      "sounds": [],
-      "volume": 100
+      sounds: [],
+      volume: 100
     }],
-    "monitors": [],
-    "extensions": [],
-    "meta": {"semver":"3.0.0","vm":"0.2.0","agent":"Client-side HTML→SB3"}
+    monitors: [],
+    extensions: [],
+    meta: {semver:"3.0.0", vm:"0.2.0", agent:"Client-side HTML→SB3"}
   };
 
   const assets = [];
@@ -116,6 +116,7 @@ async function createSB3(files) {
   for (let file of files) {
     const ext = file.name.split('.').pop().toLowerCase();
 
+    // Audio
     if (['wav','mp3'].includes(ext)) {
       const base64 = await fileToBase64(file);
       project.targets[0].sounds.push({
@@ -126,9 +127,10 @@ async function createSB3(files) {
         rate: 48000,
         sampleCount: 100000
       });
-      assets.push({file, name:file.name});
+      assets.push({file, name: file.name});
     }
 
+    // Images
     if (['png','jpg','jpeg','gif','svg'].includes(ext)) {
       const base64 = await fileToBase64(file);
       project.targets[0].costumes.push({
@@ -139,14 +141,16 @@ async function createSB3(files) {
         rotationCenterX: 0,
         rotationCenterY: 0
       });
-      assets.push({file, name:file.name});
+      assets.push({file, name: file.name});
     }
 
+    // JS → Scratch
     if (ext === 'js') {
       const jsBlocks = await parseJS(file);
       Object.assign(project.targets[0].blocks, jsBlocks);
     }
 
+    // HTML → Scratch events
     if (ext === 'html') {
       const htmlBlocks = await parseHTML(file);
       Object.assign(project.targets[0].blocks, htmlBlocks);
@@ -180,10 +184,10 @@ document.getElementById('uploadForm').onsubmit = async (e) => {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    status.textContent = "✅ Conversion complete! Download started.";
+    status.textContent = "✅ Conversion complete! Download started. I killed a cat today";
   } catch (err) {
     console.error(err);
-    status.textContent = "❌ Error: " + err.message;
+    status.textContent = "❌ Error: " + err.message + " I killed a cat yesterday";
   }
 };
 </script>
