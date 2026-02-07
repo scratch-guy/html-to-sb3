@@ -14,7 +14,7 @@ button:hover { background-color: #45a049; }
 </style>
 </head>
 <body>
-<script src="https://unpkg.com/jszip@3.11.0/dist/jszip.min.js"></script>
+
 <h1>HTML→SB3 Converter</h1>
 <form id="uploadForm">
   <label for="fileUpload">Upload Directory:</label>
@@ -23,172 +23,175 @@ button:hover { background-color: #45a049; }
 </form>
 <div id="status"></div>
 
-<!-- JSZip CDN (must load BEFORE using it) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.11.0/jszip.min.js"></script>
+<!-- Load JSZip first -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.11.0/dist/jszip.min.js"></script>
 
 <script>
-// Convert a File object to Base64
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-// Parse JS functions → Scratch procedure blocks
-async function parseJS(file) {
-  const text = await file.text();
-  const blocks = {};
-  const functions = [...text.matchAll(/function\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/g)];
-  for (let f of functions) {
-    const [_, name] = f;
-    const blockId = name + "_block";
-    blocks[blockId] = {
-      opcode: "procedures_define",
-      next: null,
-      parent: null,
-      inputs: {},
-      fields: {"NAME": [name, name]},
-      shadow: false,
-      topLevel: true,
-      x: 10,
-      y: 10
-    };
-  }
-  return blocks;
-}
-
-// Parse HTML buttons → Scratch events
-async function parseHTML(file) {
-  const text = await file.text();
-  const buttons = [...text.matchAll(/<button[^>]*id=["']([^"']+)["']/g)];
-  const blocks = {};
-  buttons.forEach((b, i) => {
-    const id = b[1];
-    const blockId = "event_" + id;
-    blocks[blockId] = {
-      opcode: "event_whenflagclicked",
-      next: null,
-      parent: null,
-      inputs: {},
-      fields: {},
-      shadow: false,
-      topLevel: true,
-      x: 20 + i*20,
-      y: 20 + i*20
-    };
-  });
-  return blocks;
-}
-
-// Create the SB3 project from files
-async function createSB3(files) {
-  const project = {
-    targets: [{
-      isStage: true,
-      name: "Stage",
-      variables: {},
-      lists: {},
-      broadcasts: {},
-      blocks: {},
-      comments: {},
-      currentCostume: 0,
-      costumes: [{
-        assetId: "cd21514d0531fdffb22204e0ec5529a3",
-        name: "backdrop1",
-        md5ext: "cd21514d0531fdffb22204e0ec5529a3.svg",
-        dataFormat: "svg",
-        rotationCenterX: 240,
-        rotationCenterY: 180
-      }],
-      sounds: [],
-      volume: 100
-    }],
-    monitors: [],
-    extensions: [],
-    meta: {semver:"3.0.0", vm:"0.2.0", agent:"Client-side HTML→SB3"}
-  };
-
-  const assets = [];
-
-  for (let file of files) {
-    const ext = file.name.split('.').pop().toLowerCase();
-
-    // Audio
-    if (['wav','mp3'].includes(ext)) {
-      const base64 = await fileToBase64(file);
-      project.targets[0].sounds.push({
-        assetId: base64.slice(0,32),
-        name: file.name,
-        md5ext: file.name,
-        dataFormat: ext,
-        rate: 48000,
-        sampleCount: 100000
-      });
-      assets.push({file, name: file.name});
-    }
-
-    // Images
-    if (['png','jpg','jpeg','gif','svg'].includes(ext)) {
-      const base64 = await fileToBase64(file);
-      project.targets[0].costumes.push({
-        assetId: base64.slice(0,32),
-        name: file.name,
-        md5ext: file.name,
-        dataFormat: ext,
-        rotationCenterX: 0,
-        rotationCenterY: 0
-      });
-      assets.push({file, name: file.name});
-    }
-
-    // JS → Scratch
-    if (ext === 'js') {
-      const jsBlocks = await parseJS(file);
-      Object.assign(project.targets[0].blocks, jsBlocks);
-    }
-
-    // HTML → Scratch events
-    if (ext === 'html') {
-      const htmlBlocks = await parseHTML(file);
-      Object.assign(project.targets[0].blocks, htmlBlocks);
-    }
+window.onload = () => {
+  if (typeof JSZip === "undefined") {
+    alert("JSZip failed to load. Check your internet connection.");
+    return;
   }
 
-  const zip = new JSZip();
-  zip.file('project.json', JSON.stringify(project));
-  for (let a of assets) zip.file(a.name, a.file);
-
-  return zip.generateAsync({type:"blob"});
-}
-
-// Form submission
-document.getElementById('uploadForm').onsubmit = async (e) => {
-  e.preventDefault();
+  const form = document.getElementById('uploadForm');
   const status = document.getElementById('status');
-  status.style.display = 'block';
-  status.textContent = "Converting...";
 
-  const files = document.getElementById('fileUpload').files;
-  if (!files.length) { status.textContent="No files selected!"; return; }
-
-  try {
-    const sb3Blob = await createSB3(files);
-    const url = URL.createObjectURL(sb3Blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = "project.sb3";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    status.textContent = "✅ Conversion complete! Download started. I killed a cat today";
-  } catch (err) {
-    console.error(err);
-    status.textContent = "❌ Error: " + err.message + " I killed a cat yesterday";
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
+
+  async function parseJS(file) {
+    const text = await file.text();
+    const blocks = {};
+    const functions = [...text.matchAll(/function\s+([a-zA-Z0-9_]+)\s*\(/g)];
+    for (let f of functions) {
+      const [_, name] = f;
+      const blockId = name + "_block";
+      blocks[blockId] = {
+        opcode: "procedures_define",
+        next: null,
+        parent: null,
+        inputs: {},
+        fields: {"NAME":[name,name]},
+        shadow: false,
+        topLevel: true,
+        x: 10,
+        y: 10
+      };
+    }
+    return blocks;
+  }
+
+  async function parseHTML(file) {
+    const text = await file.text();
+    const buttons = [...text.matchAll(/<button[^>]*id=["']([^"']+)["']/g)];
+    const blocks = {};
+    buttons.forEach((b,i)=>{
+      const id = b[1];
+      const blockId = "event_"+id;
+      blocks[blockId] = {
+        opcode: "event_whenflagclicked",
+        next: null,
+        parent: null,
+        inputs: {},
+        fields: {},
+        shadow: false,
+        topLevel: true,
+        x: 20+i*20,
+        y: 20+i*20
+      };
+    });
+    return blocks;
+  }
+
+  async function createSB3(files) {
+    const project = {
+      targets:[{
+        isStage:true,
+        name:"Stage",
+        variables:{},
+        lists:{},
+        broadcasts:{},
+        blocks:{},
+        comments:{},
+        currentCostume:0,
+        costumes:[{
+          assetId:"cd21514d0531fdffb22204e0ec5529a3",
+          name:"backdrop1",
+          md5ext:"cd21514d0531fdffb22204e0ec5529a3.svg",
+          dataFormat:"svg",
+          rotationCenterX:240,
+          rotationCenterY:180
+        }],
+        sounds:[],
+        volume:100
+      }],
+      monitors:[],
+      extensions:[],
+      meta:{semver:"3.0.0", vm:"0.2.0", agent:"Client-side HTML→SB3"}
+    };
+
+    const assets = [];
+
+    for (let file of files) {
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      // Audio
+      if (['wav','mp3'].includes(ext)) {
+        const base64 = await fileToBase64(file);
+        project.targets[0].sounds.push({
+          assetId: base64.slice(0,32),
+          name: file.name,
+          md5ext: file.name,
+          dataFormat: ext,
+          rate:48000,
+          sampleCount:100000
+        });
+        assets.push({file,name:file.name});
+      }
+
+      // Images
+      if (['png','jpg','jpeg','gif','svg'].includes(ext)) {
+        const base64 = await fileToBase64(file);
+        project.targets[0].costumes.push({
+          assetId: base64.slice(0,32),
+          name: file.name,
+          md5ext: file.name,
+          dataFormat: ext,
+          rotationCenterX:0,
+          rotationCenterY:0
+        });
+        assets.push({file,name:file.name});
+      }
+
+      // JS → Scratch
+      if (ext==='js') {
+        const jsBlocks = await parseJS(file);
+        Object.assign(project.targets[0].blocks, jsBlocks);
+      }
+
+      // HTML → Scratch events
+      if (ext==='html') {
+        const htmlBlocks = await parseHTML(file);
+        Object.assign(project.targets[0].blocks, htmlBlocks);
+      }
+    }
+
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify(project));
+    for (let a of assets) zip.file(a.name,a.file);
+    return zip.generateAsync({type:"blob"});
+  }
+
+  form.onsubmit = async (e)=>{
+    e.preventDefault();
+    status.style.display='block';
+    status.textContent = "Converting...";
+
+    const files = document.getElementById('fileUpload').files;
+    if (!files.length) { status.textContent="No files selected!"; return; }
+
+    try {
+      const sb3Blob = await createSB3(files);
+      const url = URL.createObjectURL(sb3Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download="project.sb3";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      status.textContent="✅ Conversion complete! Download started.";
+    } catch(err) {
+      console.error(err);
+      status.textContent="❌ Error: "+err.message;
+    }
+  };
 };
 </script>
 
