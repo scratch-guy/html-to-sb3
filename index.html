@@ -1,85 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HTML to SB3 Converter</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 20px;
-        }
-        form {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        input, button {
-            padding: 10px;
-            font-size: 16px;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        #status {
-            margin-top: 20px;
-            padding: 10px;
-            display: none;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML to SB3 Converter</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+    }
+    form {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    input, button {
+        padding: 10px;
+        font-size: 16px;
+    }
+    button {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        cursor: pointer;
+    }
+    button:hover {
+        background-color: #45a049;
+    }
+    #status {
+        margin-top: 20px;
+        padding: 10px;
+        display: none;
+    }
+</style>
 </head>
 <body>
-    <h1>HTML to SB3 Converter</h1>
-    <form id="uploadForm">
-        <label for="fileUpload">Upload Directory:</label>
-        <input type="file" id="fileUpload" webkitdirectory directory multiple>
-        <button type="submit">Convert to SB3</button>
-    </form>
-    <div id="status"></div>
-    <script>
-        document.getElementById('uploadForm').onsubmit = async function(e) {
-            e.preventDefault();
-            const statusDiv = document.getElementById('status');
-            statusDiv.style.display = 'block';
-            statusDiv.textContent = 'Processing...';
-            
-            const files = document.getElementById('fileUpload').files;
-            const formData = new FormData();
-            
-            for (let file of files) {
-                formData.append('files', file, file.webkitRelativePath);
-            }
-            
-            try {
-                const response = await fetch('/convert', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    statusDiv.textContent = 'Conversion successful! SB3 file: ' + data.sb3_file;
-                    statusDiv.style.backgroundColor = '#d4edda';
-                    statusDiv.style.color = '#155724';
-                } else {
-                    statusDiv.textContent = 'Conversion failed!';
-                    statusDiv.style.backgroundColor = '#f8d7da';
-                    statusDiv.style.color = '#721c24';
-                }
-            } catch (error) {
-                statusDiv.textContent = 'Error: ' + error.message;
-                statusDiv.style.backgroundColor = '#f8d7da';
-                statusDiv.style.color = '#721c24';
-            }
-        };
-    </script>
+<h1>HTML to SB3 Converter</h1>
+<form id="uploadForm">
+    <label for="fileUpload">Upload Directory:</label>
+    <input type="file" id="fileUpload" webkitdirectory directory multiple>
+    <button type="submit">Convert to SB3</button>
+</form>
+<div id="status"></div>
+
+<script>
+const FLASK_SERVER_URL = "https://your-flask-server.com/convert"; // <-- Replace with your deployed Flask server
+
+document.getElementById('uploadForm').onsubmit = async function(e) {
+    e.preventDefault();
+    const statusDiv = document.getElementById('status');
+    statusDiv.style.display = 'block';
+    statusDiv.style.backgroundColor = '#fff';
+    statusDiv.style.color = '#000';
+    statusDiv.textContent = 'Processing...';
+
+    const files = document.getElementById('fileUpload').files;
+    if (files.length === 0) {
+        statusDiv.textContent = 'Please select a folder first!';
+        return;
+    }
+
+    const formData = new FormData();
+    for (let file of files) {
+        formData.append('files', file, file.webkitRelativePath);
+    }
+
+    try {
+        const response = await fetch(FLASK_SERVER_URL, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'project.sb3';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+            statusDiv.textContent = '✅ Conversion complete! Download started.';
+            statusDiv.style.backgroundColor = '#d4edda';
+            statusDiv.style.color = '#155724';
+        } else {
+            const errorText = await response.text();
+            statusDiv.textContent = `❌ Conversion failed: ${errorText}`;
+            statusDiv.style.backgroundColor = '#f8d7da';
+            statusDiv.style.color = '#721c24';
+        }
+    } catch (err) {
+        statusDiv.textContent = `❌ Error: ${err.message}`;
+        statusDiv.style.backgroundColor = '#f8d7da';
+        statusDiv.style.color = '#721c24';
+        console.error(err);
+    }
+};
+</script>
 </body>
 </html>
