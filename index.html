@@ -3,103 +3,190 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HTML to SB3 Converter</title>
+<title>HTML→SB3 Converter w/ Code</title>
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        max-width: 800px;
-        margin: 50px auto;
-        padding: 20px;
-    }
-    form {
-        display: flex;
-        flex-direction: column;
-        gap: 15px;
-    }
-    input, button {
-        padding: 10px;
-        font-size: 16px;
-    }
-    button {
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-        cursor: pointer;
-    }
-    button:hover {
-        background-color: #45a049;
-    }
-    #status {
-        margin-top: 20px;
-        padding: 10px;
-        display: none;
-    }
+body { font-family: Arial; max-width: 800px; margin: 50px auto; padding: 20px; }
+form { display: flex; flex-direction: column; gap: 15px; }
+input, button { padding: 10px; font-size: 16px; }
+button { background: #4CAF50; color: white; border: none; cursor: pointer; }
+button:hover { background-color: #45a049; }
+#status { margin-top: 20px; padding: 10px; display: none; }
 </style>
 </head>
 <body>
-<h1>HTML to SB3 Converter</h1>
+
+<h1>HTML→SB3 Converter w/ Code</h1>
 <form id="uploadForm">
-    <label for="fileUpload">Upload Directory:</label>
-    <input type="file" id="fileUpload" webkitdirectory directory multiple>
-    <button type="submit">Convert to SB3</button>
+  <label for="fileUpload">Upload Directory:</label>
+  <input type="file" id="fileUpload" webkitdirectory directory multiple>
+  <button type="submit">Convert to SB3</button>
 </form>
 <div id="status"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.11.0/jszip.min.js"></script>
+
 <script>
-const FLASK_SERVER_URL = "https://your-flask-server.com/convert"; // <-- Replace with your deployed Flask server
+// Base64 utility
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
-document.getElementById('uploadForm').onsubmit = async function(e) {
-    e.preventDefault();
-    const statusDiv = document.getElementById('status');
-    statusDiv.style.display = 'block';
-    statusDiv.style.backgroundColor = '#fff';
-    statusDiv.style.color = '#000';
-    statusDiv.textContent = 'Processing...';
+// Parse JS into Scratch blocks (very simple function->procedure mapping)
+async function parseJS(file) {
+  const text = await file.text();
+  const blocks = {};
+  const functions = [...text.matchAll(/function\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/g)];
+  
+  for (let f of functions) {
+    const [_, name, params] = f;
+    const blockId = name + "_block";
+    blocks[blockId] = {
+      opcode: "procedures_define",
+      next: null,
+      parent: null,
+      inputs: {},
+      fields: {"NAME": [name, name]},
+      shadow: false,
+      topLevel: true,
+      x: 10,
+      y: 10
+    };
+  }
+  return blocks;
+}
 
-    const files = document.getElementById('fileUpload').files;
-    if (files.length === 0) {
-        statusDiv.textContent = 'Please select a folder first!';
-        return;
+// Parse HTML buttons as Scratch events
+async function parseHTML(file) {
+  const text = await file.text();
+  const buttons = [...text.matchAll(/<button[^>]*id=["']([^"']+)["']/g)];
+  const blocks = {};
+  buttons.forEach((b, i) => {
+    const id = b[1];
+    const blockId = "event_" + id;
+    blocks[blockId] = {
+      opcode: "event_whenflagclicked",
+      next: null,
+      parent: null,
+      inputs: {},
+      fields: {},
+      shadow: false,
+      topLevel: true,
+      x: 20 + i*20,
+      y: 20 + i*20
+    };
+  });
+  return blocks;
+}
+
+// Create SB3
+async function createSB3(files) {
+  const project = {
+    "targets": [{
+      "isStage": true,
+      "name": "Stage",
+      "variables": {},
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {},
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [{
+        "assetId": "cd21514d0531fdffb22204e0ec5529a3",
+        "name": "backdrop1",
+        "md5ext": "cd21514d0531fdffb22204e0ec5529a3.svg",
+        "dataFormat": "svg",
+        "rotationCenterX": 240,
+        "rotationCenterY": 180
+      }],
+      "sounds": [],
+      "volume": 100
+    }],
+    "monitors": [],
+    "extensions": [],
+    "meta": {"semver":"3.0.0","vm":"0.2.0","agent":"Client-side HTML→SB3"}
+  };
+
+  const assets = [];
+
+  for (let file of files) {
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (['wav','mp3'].includes(ext)) {
+      const base64 = await fileToBase64(file);
+      project.targets[0].sounds.push({
+        assetId: base64.slice(0,32),
+        name: file.name,
+        md5ext: file.name,
+        dataFormat: ext,
+        rate: 48000,
+        sampleCount: 100000
+      });
+      assets.push({file, name:file.name});
     }
 
-    const formData = new FormData();
-    for (let file of files) {
-        formData.append('files', file, file.webkitRelativePath);
+    if (['png','jpg','jpeg','gif','svg'].includes(ext)) {
+      const base64 = await fileToBase64(file);
+      project.targets[0].costumes.push({
+        assetId: base64.slice(0,32),
+        name: file.name,
+        md5ext: file.name,
+        dataFormat: ext,
+        rotationCenterX: 0,
+        rotationCenterY: 0
+      });
+      assets.push({file, name:file.name});
     }
 
-    try {
-        const response = await fetch(FLASK_SERVER_URL, {
-            method: 'POST',
-            body: formData
-        });
-
-        if (response.ok) {
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'project.sb3';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-
-            statusDiv.textContent = '✅ Conversion complete! Download started.';
-            statusDiv.style.backgroundColor = '#d4edda';
-            statusDiv.style.color = '#155724';
-        } else {
-            const errorText = await response.text();
-            statusDiv.textContent = `❌ Conversion failed: ${errorText}`;
-            statusDiv.style.backgroundColor = '#f8d7da';
-            statusDiv.style.color = '#721c24';
-        }
-    } catch (err) {
-        statusDiv.textContent = `❌ Error: ${err.message}`;
-        statusDiv.style.backgroundColor = '#f8d7da';
-        statusDiv.style.color = '#721c24';
-        console.error(err);
+    if (ext === 'js') {
+      const jsBlocks = await parseJS(file);
+      Object.assign(project.targets[0].blocks, jsBlocks);
     }
+
+    if (ext === 'html') {
+      const htmlBlocks = await parseHTML(file);
+      Object.assign(project.targets[0].blocks, htmlBlocks);
+    }
+  }
+
+  const zip = new JSZip();
+  zip.file('project.json', JSON.stringify(project));
+  for (let a of assets) zip.file(a.name, a.file);
+
+  return zip.generateAsync({type:"blob"});
+}
+
+// Form submission
+document.getElementById('uploadForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const status = document.getElementById('status');
+  status.style.display = 'block';
+  status.textContent = "Converting...";
+
+  const files = document.getElementById('fileUpload').files;
+  if (!files.length) { status.textContent="No files selected!"; return; }
+
+  try {
+    const sb3Blob = await createSB3(files);
+    const url = URL.createObjectURL(sb3Blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "project.sb3";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    status.textContent = "✅ Conversion complete! Download started.";
+  } catch (err) {
+    console.error(err);
+    status.textContent = "❌ Error: " + err.message;
+  }
 };
 </script>
+
 </body>
 </html>
