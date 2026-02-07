@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML to SB3 Converter</title>
+</head>
+<body>
+    <h1>HTML to SB3 Converter</h1>
+    <form id="uploadForm">
+        <label for="fileUpload">Upload Directory:</label>
+        <input type="file" id="fileUpload" webkitdirectory directory multiple>
+        <button type="submit">Convert to SB3</button>
+    </form>
+    <script>
+        document.getElementById('uploadForm').onsubmit = function(e) {
+            e.preventDefault();
+            // Logic to handle the conversion will go here
+        };
+    </script>
+</body>
+</html>
